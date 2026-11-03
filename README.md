@@ -11,4 +11,12 @@ fourway/
 ├── compose.dev.yaml
 ```
 
+## Spuštění Dev prostředí
+```
+docker compose -f compose.dev.yaml up
+cd client
+pnpm expo start
+```
+
 ## Licence
+Ještě uvidíme
