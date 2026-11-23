@@ -19,7 +19,19 @@ pnpm expo start
 ```
 
 ## Databáze
-Backend používá PostgreSQL přes EF Core. Migrace se aplikují automaticky při startu API.
+Backend používá PostgreSQL s rozšířením PostGIS přes EF Core. Migrace se aplikují
+automaticky při startu API.
+
+Databáze vyžaduje:
+
+- rozšíření `postgis` – geografické body zastávek (`geography(Point, 4326)`) a GiST index,
+- rozšíření `unaccent` a pomocnou funkci `f_unaccent(text)` – normalizace názvů
+  zastávek pro deduplikaci. Funkci vytváří migrace, protože `unaccent` není
+  `IMMUTABLE` a nelze ho použít přímo v generovaných sloupcích.
+
+V dev prostředí tyto požadavky splňuje image `postgis/postgis:18-3.7-alpine`.
+Model PostGIS používá `NetTopologySuite`, souřadnice se ukládají jako
+`Point(longitude, latitude)` v SRID 4326.
 
 ### Dev prostředí
 Connection string je nastavený v `compose.dev.yaml` jako proměnná prostředí

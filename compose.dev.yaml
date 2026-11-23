@@ -20,7 +20,7 @@ services:
     command: dotnet watch run --no-hot-reload --non-interactive --no-launch-profile
 
   database:
-    image: postgres:18-alpine
+    image: postgis/postgis:18-3.7-alpine
     ports:
       - "5432:5432"
     environment:
