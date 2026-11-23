@@ -7,17 +7,17 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["Fourway.Api.csproj", "./"]
-RUN dotnet restore "Fourway.Api.csproj"
+COPY ["Fourway.Core/Fourway.Core.csproj", "./Fourway.Core/"]
+RUN dotnet restore "./Fourway.Core/Fourway.Core.csproj"
 COPY . .
 WORKDIR "/src/"
-RUN dotnet build "./Fourway.Api.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "./Fourway.Core/Fourway.Core.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./Fourway.Api.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "./Fourway.Core/Fourway.Core.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "Fourway.Api.dll"]
+ENTRYPOINT ["dotnet", "Fourway.Core.dll"]
