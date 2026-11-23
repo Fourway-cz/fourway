@@ -76,6 +76,46 @@ public sealed class Stop
     public string? LocationSource { get; private set; }
 
     /// <summary>
+    /// Označuje, zda zastávka má nástupiště podle pevných kódů vybavenosti.
+    /// </summary>
+    /// <remarks>
+    /// Extrahuje se z <c>PevnyKod1_5</c> v <c>Zastavky.txt</c>.
+    /// </remarks>
+    public bool HasPlatform { get; private set; }
+
+    /// <summary>
+    /// Označuje bezbariérovost zastávky podle pevných kódů vybavenosti.
+    /// </summary>
+    /// <remarks>
+    /// Extrahuje se z <c>PevnyKod1_5</c> v <c>Zastavky.txt</c>.
+    /// </remarks>
+    public bool WheelchairAccessible { get; private set; }
+
+    /// <summary>
+    /// Označuje, zda zastávka má přístřešek podle pevných kódů vybavenosti.
+    /// </summary>
+    /// <remarks>
+    /// Extrahuje se z <c>PevnyKod1_5</c> v <c>Zastavky.txt</c>.
+    /// </remarks>
+    public bool HasShelter { get; private set; }
+
+    /// <summary>
+    /// Označuje, zda zastávka má informační tabuli podle pevných kódů vybavenosti.
+    /// </summary>
+    /// <remarks>
+    /// Extrahuje se z <c>PevnyKod1_5</c> v <c>Zastavky.txt</c>.
+    /// </remarks>
+    public bool HasInfoBoard { get; private set; }
+
+    /// <summary>
+    /// Označuje, zda zastávka má osvětlení podle pevných kódů vybavenosti.
+    /// </summary>
+    /// <remarks>
+    /// Extrahuje se z <c>PevnyKod1_5</c> v <c>Zastavky.txt</c>.
+    /// </remarks>
+    public bool HasLighting { get; private set; }
+
+    /// <summary>
     /// Normalizovaný tvar <see cref="Municipality"/> pro deduplikaci.
     /// </summary>
     /// <remarks>
@@ -147,7 +187,12 @@ public sealed class Stop
         string districtCode,
         string countryCode,
         Point? location = null,
-        string? locationSource = null)
+        string? locationSource = null,
+        bool hasPlatform = false,
+        bool wheelchairAccessible = false,
+        bool hasShelter = false,
+        bool hasInfoBoard = false,
+        bool hasLighting = false)
     {
         Id = Guid.CreateVersion7();
         Municipality = DomainValidation.Required(
@@ -171,6 +216,11 @@ public sealed class Stop
             nameof(countryCode),
             CountryCodeMaxLength).ToUpperInvariant();
         SetLocation(location, locationSource);
+        HasPlatform = hasPlatform;
+        WheelchairAccessible = wheelchairAccessible;
+        HasShelter = hasShelter;
+        HasInfoBoard = hasInfoBoard;
+        HasLighting = hasLighting;
     }
 
     /// <summary>
@@ -232,5 +282,25 @@ public sealed class Stop
             locationSource,
             nameof(locationSource),
             LocationSourceMaxLength);
+    }
+
+    /// <summary>
+    /// Nastaví příznaky vybavenosti zastávky z pevných kódů.
+    /// </summary>
+    /// <remarks>
+    /// Pevné kódy se čtou z <c>PevnyKod1_5</c> v <c>Zastavky.txt</c>.
+    /// </remarks>
+    public void SetFacilities(
+        bool hasPlatform,
+        bool wheelchairAccessible,
+        bool hasShelter,
+        bool hasInfoBoard,
+        bool hasLighting)
+    {
+        HasPlatform = hasPlatform;
+        WheelchairAccessible = wheelchairAccessible;
+        HasShelter = hasShelter;
+        HasInfoBoard = hasInfoBoard;
+        HasLighting = hasLighting;
     }
 }

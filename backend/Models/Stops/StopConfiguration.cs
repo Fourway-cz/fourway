@@ -43,6 +43,12 @@ public sealed class StopConfiguration : IEntityTypeConfiguration<Stop>
         builder.Property(x => x.LocationSource)
             .HasMaxLength(Stop.LocationSourceMaxLength);
 
+        builder.Property(x => x.HasPlatform).IsRequired();
+        builder.Property(x => x.WheelchairAccessible).IsRequired();
+        builder.Property(x => x.HasShelter).IsRequired();
+        builder.Property(x => x.HasInfoBoard).IsRequired();
+        builder.Property(x => x.HasLighting).IsRequired();
+
         builder.Property(x => x.MunicipalityNormalized)
             .HasComputedColumnSql(
                 "coalesce(f_unaccent(lower(btrim(municipality))), '')",

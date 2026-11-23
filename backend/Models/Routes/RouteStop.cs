@@ -37,6 +37,14 @@ public sealed class RouteStop
     /// </remarks>
     public string[] TariffZones { get; private set; } = [];
 
+    /// <summary>
+    /// Označuje zastávku na znamení na úrovni trasy podle pevného kódu <c>18</c>.
+    /// </summary>
+    /// <remarks>
+    /// Extrahuje se z <c>PevnyKod1_4</c> v <c>Zaslinky.txt</c>.
+    /// </remarks>
+    public bool RequestStop { get; private set; }
+
     // Pro EF Core. V doménovém kódu se nepoužívá.
     private RouteStop()
     {
@@ -49,13 +57,15 @@ public sealed class RouteStop
         Guid routeId,
         int sequence,
         Guid stopId,
-        IEnumerable<string>? tariffZones = null)
+        IEnumerable<string>? tariffZones = null,
+        bool requestStop = false)
     {
         Id = Guid.CreateVersion7();
         RouteId = routeId;
         Sequence = DomainValidation.Positive(sequence, nameof(sequence));
         StopId = stopId;
         SetTariffZones(tariffZones);
+        RequestStop = requestStop;
     }
 
     /// <summary>

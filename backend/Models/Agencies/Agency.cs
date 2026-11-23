@@ -4,8 +4,8 @@ namespace Fourway.Api.Models;
 /// Dopravce, který zajišťuje spoje.
 /// </summary>
 /// <remarks>
-/// Odpovídá záznamu v <c>Dopravci.txt</c>. Provozovny dopravce se zatím
-/// nemodelují; z více řádků se stejným IČO se použijí údaje na úrovni firmy.
+/// Odpovídá záznamu v <c>Dopravci.txt</c>. Kontaktní údaje a adresa se ukládají
+/// na úrovni provozovny v <see cref="AgencyBranch"/>.
 /// </remarks>
 public sealed class Agency
 {

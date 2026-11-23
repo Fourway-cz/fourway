@@ -41,6 +41,14 @@ public sealed class Service
     public List<ServiceException> Exceptions { get; private set; } = [];
 
     /// <summary>
+    /// Textové poznámky k kalendáři.
+    /// </summary>
+    /// <remarks>
+    /// Poznámky z <c>Caskody.txt</c> a <c>Udaje.txt</c>.
+    /// </remarks>
+    public List<ServiceNote> Notes { get; private set; } = [];
+
+    /// <summary>
     /// Vytvoří prázdný kalendář. Před uložením je nutné přidat alespoň jeden vzor.
     /// </summary>
     /// <remarks>
@@ -105,6 +113,22 @@ public sealed class Service
         Exceptions.Add(exception);
         RecomputeRuleHash();
         return exception;
+    }
+
+    /// <summary>
+    /// Přidá textovou poznámku k kalendáři.
+    /// </summary>
+    public ServiceNote AddNote(
+        int sequence,
+        string? label,
+        string text,
+        ServiceNoteSource source,
+        DateOnly? validFrom = null,
+        DateOnly? validTo = null)
+    {
+        var note = new ServiceNote(Id, sequence, label, text, source, validFrom, validTo);
+        Notes.Add(note);
+        return note;
     }
 
     /// <summary>

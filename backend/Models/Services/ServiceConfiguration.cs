@@ -32,5 +32,10 @@ public sealed class ServiceConfiguration : IEntityTypeConfiguration<Service>
             .WithOne()
             .HasForeignKey(x => x.ServiceId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.Notes)
+            .WithOne()
+            .HasForeignKey(x => x.ServiceId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

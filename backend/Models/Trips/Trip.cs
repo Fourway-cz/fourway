@@ -41,6 +41,14 @@ public sealed class Trip
     public bool BikesAllowed { get; private set; }
 
     /// <summary>
+    /// Označuje, zda je u spoje vyloučena místní přeprava podle pevného kódu <c>30</c>.
+    /// </summary>
+    /// <remarks>
+    /// Extrahuje se z <c>PevnyKod1_10</c> v <c>Spoje.txt</c>.
+    /// </remarks>
+    public bool LocalTransportExcluded { get; private set; }
+
+    /// <summary>
     /// Parita čísla spoje, která v JDF rozlišuje směr.
     /// </summary>
     /// <remarks>
@@ -62,7 +70,8 @@ public sealed class Trip
         int tripNumber,
         Guid serviceId,
         bool wheelchairAccessible = false,
-        bool bikesAllowed = false)
+        bool bikesAllowed = false,
+        bool localTransportExcluded = false)
     {
         Id = Guid.CreateVersion7();
         RouteId = routeId;
@@ -70,14 +79,16 @@ public sealed class Trip
         ServiceId = serviceId;
         WheelchairAccessible = wheelchairAccessible;
         BikesAllowed = bikesAllowed;
+        LocalTransportExcluded = localTransportExcluded;
     }
 
     /// <summary>
     /// Nastaví příznaky dostupnosti vozidla.
     /// </summary>
-    public void SetAccessibility(bool wheelchairAccessible, bool bikesAllowed)
+    public void SetAccessibility(bool wheelchairAccessible, bool bikesAllowed, bool localTransportExcluded = false)
     {
         WheelchairAccessible = wheelchairAccessible;
         BikesAllowed = bikesAllowed;
+        LocalTransportExcluded = localTransportExcluded;
     }
 }

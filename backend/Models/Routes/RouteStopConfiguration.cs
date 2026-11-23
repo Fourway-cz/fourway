@@ -23,6 +23,7 @@ public sealed class RouteStopConfiguration : IEntityTypeConfiguration<RouteStop>
         builder.Property(x => x.TariffZones)
             .HasColumnType("text[]")
             .IsRequired();
+        builder.Property(x => x.RequestStop).IsRequired();
 
         builder.HasIndex(x => new { x.RouteId, x.Sequence }).IsUnique();
 

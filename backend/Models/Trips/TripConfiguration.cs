@@ -22,6 +22,7 @@ public sealed class TripConfiguration : IEntityTypeConfiguration<Trip>
         builder.Property(x => x.ServiceId).IsRequired();
         builder.Property(x => x.WheelchairAccessible).IsRequired();
         builder.Property(x => x.BikesAllowed).IsRequired();
+        builder.Property(x => x.LocalTransportExcluded).IsRequired();
 
         builder.HasIndex(x => new { x.RouteId, x.TripNumber }).IsUnique();
 
