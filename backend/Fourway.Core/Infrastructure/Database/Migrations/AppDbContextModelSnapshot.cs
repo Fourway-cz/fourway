@@ -74,6 +74,68 @@ namespace Fourway.Core.Infrastructure.Database.Migrations
                     b.ToTable("agencies", (string)null);
                 });
 
+            modelBuilder.Entity("Fourway.Core.Models.AgencyBranch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("address");
+
+                    b.Property<Guid>("AgencyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agency_id");
+
+                    b.Property<int>("BranchNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("branch_number");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("Fax")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("fax");
+
+                    b.Property<string>("Phone1")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("phone1");
+
+                    b.Property<string>("Phone2")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("phone2");
+
+                    b.Property<string>("PhonePrefix")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("phone_prefix");
+
+                    b.Property<string>("Web")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("web");
+
+                    b.HasKey("Id")
+                        .HasName("pk_agency_branches");
+
+                    b.HasIndex("AgencyId", "BranchNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_agency_branches_agency_id_branch_number");
+
+                    b.ToTable("agency_branches", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_agency_branches_branch_number_not_negative", "branch_number >= 0");
+                        });
+                });
+
             modelBuilder.Entity("Fourway.Core.Models.Example", b =>
                 {
                     b.Property<Guid>("Id")
@@ -325,6 +387,10 @@ namespace Fourway.Core.Infrastructure.Database.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<bool>("RequestStop")
+                        .HasColumnType("boolean")
+                        .HasColumnName("request_stop");
+
                     b.Property<Guid>("RouteId")
                         .HasColumnType("uuid")
                         .HasColumnName("route_id");
@@ -401,6 +467,55 @@ namespace Fourway.Core.Infrastructure.Database.Migrations
                         .HasName("pk_service_exceptions");
 
                     b.ToTable("service_exceptions", (string)null);
+                });
+
+            modelBuilder.Entity("Fourway.Core.Models.ServiceNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("label");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("sequence");
+
+                    b.Property<Guid>("ServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_id");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer")
+                        .HasColumnName("source");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("text");
+
+                    b.Property<DateOnly?>("ValidFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("valid_from");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date")
+                        .HasColumnName("valid_to");
+
+                    b.HasKey("Id")
+                        .HasName("pk_service_notes");
+
+                    b.HasIndex("ServiceId")
+                        .HasDatabaseName("ix_service_notes_service_id");
+
+                    b.ToTable("service_notes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_service_notes_sequence_not_negative", "sequence >= 0");
+                        });
                 });
 
             modelBuilder.Entity("Fourway.Core.Models.ServicePattern", b =>
@@ -489,6 +604,22 @@ namespace Fourway.Core.Infrastructure.Database.Migrations
                         .HasColumnType("character varying(2)")
                         .HasColumnName("district_code");
 
+                    b.Property<bool>("HasInfoBoard")
+                        .HasColumnType("boolean")
+                        .HasColumnName("has_info_board");
+
+                    b.Property<bool>("HasLighting")
+                        .HasColumnType("boolean")
+                        .HasColumnName("has_lighting");
+
+                    b.Property<bool>("HasPlatform")
+                        .HasColumnType("boolean")
+                        .HasColumnName("has_platform");
+
+                    b.Property<bool>("HasShelter")
+                        .HasColumnType("boolean")
+                        .HasColumnName("has_shelter");
+
                     b.Property<string>("LocalityDetail")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
@@ -534,6 +665,10 @@ namespace Fourway.Core.Infrastructure.Database.Migrations
                         .HasColumnType("text")
                         .HasColumnName("municipality_part_normalized")
                         .HasComputedColumnSql("coalesce(f_unaccent(lower(btrim(municipality_part))), '')", true);
+
+                    b.Property<bool>("WheelchairAccessible")
+                        .HasColumnType("boolean")
+                        .HasColumnName("wheelchair_accessible");
 
                     b.HasKey("Id")
                         .HasName("pk_stops");
@@ -670,6 +805,10 @@ namespace Fourway.Core.Infrastructure.Database.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("bikes_allowed");
 
+                    b.Property<bool>("LocalTransportExcluded")
+                        .HasColumnType("boolean")
+                        .HasColumnName("local_transport_excluded");
+
                     b.Property<Guid>("RouteId")
                         .HasColumnType("uuid")
                         .HasColumnName("route_id");
@@ -742,6 +881,16 @@ namespace Fourway.Core.Infrastructure.Database.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Fourway.Core.Models.AgencyBranch", b =>
+                {
+                    b.HasOne("Fourway.Core.Models.Agency", null)
+                        .WithMany()
+                        .HasForeignKey("AgencyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_agency_branches_agencies_agency_id");
+                });
+
             modelBuilder.Entity("Fourway.Core.Models.Route", b =>
                 {
                     b.HasOne("Fourway.Core.Models.Agency", null)
@@ -801,6 +950,16 @@ namespace Fourway.Core.Infrastructure.Database.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_service_exceptions_services_service_id");
+                });
+
+            modelBuilder.Entity("Fourway.Core.Models.ServiceNote", b =>
+                {
+                    b.HasOne("Fourway.Core.Models.Service", null)
+                        .WithMany("Notes")
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_service_notes_services_service_id");
                 });
 
             modelBuilder.Entity("Fourway.Core.Models.ServicePattern", b =>
@@ -891,6 +1050,8 @@ namespace Fourway.Core.Infrastructure.Database.Migrations
             modelBuilder.Entity("Fourway.Core.Models.Service", b =>
                 {
                     b.Navigation("Exceptions");
+
+                    b.Navigation("Notes");
 
                     b.Navigation("Patterns");
                 });

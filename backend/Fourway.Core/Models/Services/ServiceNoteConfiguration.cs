@@ -28,10 +28,5 @@ public sealed class ServiceNoteConfiguration : IEntityTypeConfiguration<ServiceN
         builder.Property(x => x.Source).IsRequired();
         builder.Property(x => x.ValidFrom);
         builder.Property(x => x.ValidTo);
-
-        builder.HasOne<Service>()
-            .WithMany()
-            .HasForeignKey(x => x.ServiceId)
-            .OnDelete(DeleteBehavior.Cascade);
     }
 }

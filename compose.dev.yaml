@@ -5,7 +5,7 @@ services:
       - "8080:8080"
     working_dir: /app
     volumes:
-      - ./backend:/app
+      - ./backend/Fourway.Core:/app
       - nuget-cache:/root/.nuget/packages
       - /app/obj
       - /app/bin
