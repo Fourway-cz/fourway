@@ -24,6 +24,8 @@ public static class EndpointExtensions
             options.Serializer.Options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
             options.Serializer.Options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
 
+            options.Binding.UsePropertyNamingPolicy = true;
+
             options.Errors.ContentType = "application/json";
             options.Errors.ResponseBuilder = (failures, _, _) =>
             {
