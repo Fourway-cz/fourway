@@ -12,5 +12,7 @@ public sealed class ImportOptions
 
     public bool DryRun { get; set; }
 
+    public bool ResetDatabase { get; set; }
+
     public int BatchCommitSize { get; set; } = 100;
 }

@@ -25,6 +25,13 @@ public sealed class JdfImportOrchestrator
 
         if (!_options.DryRun)
         {
+            if (_options.ResetDatabase)
+            {
+                Console.WriteLine("Mažu databázi (--reset)...");
+                await _bulkImporter.ResetDatabaseAsync(ct);
+                Console.WriteLine("Databáze vyprázdněna.");
+            }
+
             await _bulkImporter.InitializeAsync(ct);
         }
         else
@@ -40,6 +47,10 @@ public sealed class JdfImportOrchestrator
         var skipped = 0;
         var imported = 0;
         var errors = 0;
+        long totalStops = 0;
+        long totalRouteStops = 0;
+        long totalTrips = 0;
+        long totalStopTimes = 0;
 
         foreach (var entry in outerZip.Entries)
         {
@@ -71,6 +82,11 @@ public sealed class JdfImportOrchestrator
                 using var innerArchive = new ZipArchive(innerZipStream, ZipArchiveMode.Read, leaveOpen: false);
                 var package = JdfPackageParser.Parse(innerArchive, entry.Name, fileHash);
 
+                totalStops += package.Zastavky.Count;
+                totalRouteStops += package.Zaslinky.Count;
+                totalTrips += package.Spoje.Count;
+                totalStopTimes += package.Zasspoje.Count;
+
                 if (!_options.DryRun)
                 {
                     await _bulkImporter.ImportPackageAsync(package, ct);
@@ -93,15 +109,28 @@ public sealed class JdfImportOrchestrator
         }
 
         sw.Stop();
+        var elapsed = sw.Elapsed;
+        var rate = processed / Math.Max(0.1, elapsed.TotalSeconds);
         Console.WriteLine();
         Console.WriteLine("========================================");
-        Console.WriteLine($"Import dokončen za {sw.Elapsed.TotalSeconds:F1} s.");
+        Console.WriteLine($"Import dokončen za {FormatElapsed(elapsed)}.");
+        Console.WriteLine($"Rychlost:        {rate:F1} balíčků/s");
         Console.WriteLine($"Celkem balíčků: {totalEntries}");
         Console.WriteLine($"Importováno:     {imported}");
         Console.WriteLine($"Přeskočeno:     {skipped}");
         Console.WriteLine($"Chyb:           {errors}");
+        Console.WriteLine("----------------------------------------");
+        Console.WriteLine($"Zastávky:          {totalStops:N0}");
+        Console.WriteLine($"Zastávky v trase:  {totalRouteStops:N0}");
+        Console.WriteLine($"Spoje:             {totalTrips:N0}");
+        Console.WriteLine($"Časy zastavení:   {totalStopTimes:N0}");
         Console.WriteLine("========================================");
     }
+
+    private static string FormatElapsed(TimeSpan elapsed) =>
+        elapsed.TotalHours >= 1
+            ? $"{(int)elapsed.TotalHours} h {elapsed.Minutes} min {elapsed.Seconds} s"
+            : $"{elapsed.Minutes} min {elapsed.Seconds} s";
 
     private static async Task<string> ComputeEntryHashAsync(ZipArchiveEntry entry, CancellationToken ct)
     {

@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using Fourway.Import.Configuration;
 using Fourway.Import.Extraction;
 using Fourway.Import.Services;
 using Fourway.Import.Storage;
+using Microsoft.Extensions.Configuration;
 
 Console.WriteLine("=== Fourway.Import CLI ===");
 
@@ -27,6 +29,10 @@ for (var i = 0; i < args.Length; i++)
     {
         options.DryRun = true;
     }
+    else if (arg.Equals("--reset", StringComparison.OrdinalIgnoreCase))
+    {
+        options.ResetDatabase = true;
+    }
     else if (arg.Equals("--help", StringComparison.OrdinalIgnoreCase) || arg.Equals("-h", StringComparison.OrdinalIgnoreCase))
     {
         PrintUsage();
@@ -35,7 +41,8 @@ for (var i = 0; i < args.Length; i++)
 }
 
 connectionString ??= Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
-    ?? Environment.GetEnvironmentVariable("DEFAULT_CONNECTION");
+    ?? Environment.GetEnvironmentVariable("DEFAULT_CONNECTION")
+    ?? LoadAppSettings().GetConnectionString("DefaultConnection");
 
 if (string.IsNullOrWhiteSpace(connectionString) && !options.DryRun)
 {
@@ -57,7 +64,10 @@ try
         downloadedTempFile = Path.Combine(tempDir, $"jdf_{Guid.NewGuid():N}.zip");
 
         var downloader = new JdfArchiveDownloader();
+        var downloadSw = Stopwatch.StartNew();
         archivePath = await downloader.DownloadAsync(options.JdfUrl, downloadedTempFile);
+        downloadSw.Stop();
+        Console.WriteLine($"Stahování trvalo {downloadSw.Elapsed.TotalSeconds:F1} s.");
     }
     else
     {
@@ -99,6 +109,17 @@ finally
     }
 }
 
+static IConfiguration LoadAppSettings()
+{
+    var builder = new ConfigurationBuilder();
+    foreach (var directory in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+    {
+        builder.AddJsonFile(Path.Combine(directory, "appsettings.json"), optional: true);
+    }
+
+    return builder.Build();
+}
+
 static void PrintUsage()
 {
     Console.WriteLine("""
@@ -109,6 +130,7 @@ static void PrintUsage()
           --url <adresa>               Vlastní URL pro stažení JDF.zip
           --connection-string <conn>   Connection string k PostgreSQL
           --dry-run                    Pouze parsování a hashování, nezapisuje do databáze
+          --reset                      Před importem vyprázdní databázi (TRUNCATE všech tabulek)
           --help, -h                   Zobrazí tuto nápovědu
 
         Proměnné prostředí:

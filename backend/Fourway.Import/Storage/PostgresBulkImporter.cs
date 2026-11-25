@@ -18,6 +18,7 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
     private readonly Dictionary<string, Guid> _knownServices = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Guid> _knownIdsSystems = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Guid> _knownStops = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<(Dictionary<string, Guid> Cache, string Key)> _uncommittedCacheEntries = [];
 
     public PostgresBulkImporter(string connectionString)
     {
@@ -92,6 +93,28 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
 
     public bool IsHashAlreadyImported(string hash) => _knownHashes.Contains(hash);
 
+    public async Task ResetDatabaseAsync(CancellationToken ct = default)
+    {
+        await using var conn = await _dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(
+            """
+            TRUNCATE TABLE
+                agency_branches, agencies, examples, ids_systems, import_batches,
+                route_ids_info, route_stops, routes, service_exceptions, service_notes,
+                service_patterns, services, stop_source_refs, stop_times, stops,
+                trip_operators, trips
+            RESTART IDENTITY CASCADE;
+            """, conn);
+        await cmd.ExecuteNonQueryAsync(ct);
+
+        _knownHashes.Clear();
+        _knownAgencies.Clear();
+        _knownServices.Clear();
+        _knownIdsSystems.Clear();
+        _knownStops.Clear();
+        _uncommittedCacheEntries.Clear();
+    }
+
     public async Task ImportPackageAsync(JdfPackage package, CancellationToken ct = default)
     {
         if (_knownHashes.Contains(package.FileHash))
@@ -101,6 +124,7 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
 
         await using var conn = await _dataSource.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+        _uncommittedCacheEntries.Clear();
 
         try
         {
@@ -426,10 +450,16 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
             }
 
             await tx.CommitAsync(ct);
+            _uncommittedCacheEntries.Clear();
             _knownHashes.Add(package.FileHash);
         }
         catch
         {
+            foreach (var (cache, key) in _uncommittedCacheEntries)
+            {
+                cache.Remove(key);
+            }
+            _uncommittedCacheEntries.Clear();
             await tx.RollbackAsync(ct);
             throw;
         }
@@ -477,7 +507,7 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
             cmd.Parameters.AddWithValue((object?)agency.PersonName ?? DBNull.Value);
 
             var resolvedId = (Guid)(await cmd.ExecuteScalarAsync(ct))!;
-            _knownAgencies[agency.Ico] = resolvedId;
+            TrackCacheEntry(_knownAgencies, agency.Ico, resolvedId);
             return resolvedId;
         }
         else
@@ -524,8 +554,7 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
         var district = (raw.Okres.Length > 2 ? raw.Okres[..2] : raw.Okres).ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(district)) district = "--";
 
-        var country = (raw.Stat.Length > 2 ? raw.Stat[..2] : raw.Stat).ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(country)) country = "CZ";
+        var country = NormalizeCountryCode(raw.Stat);
 
         var hasPlatform = raw.PevneKody.Contains(15);
         var wheelchair = raw.PevneKody.Contains((int)FixedCode.WheelchairAccessible);
@@ -584,7 +613,7 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
                 reader.GetString(3),
                 reader.GetString(4),
                 reader.GetString(5));
-            _knownStops[key] = resId;
+            TrackCacheEntry(_knownStops, key, resId);
             return resId;
         }
 
@@ -671,7 +700,7 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
             serviceId = (Guid)(await queryCmd.ExecuteScalarAsync(ct))!;
         }
 
-        _knownServices[service.RuleHash] = serviceId;
+        TrackCacheEntry(_knownServices, service.RuleHash, serviceId);
         return serviceId;
     }
 
@@ -711,12 +740,46 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
             id = (Guid)(await queryCmd.ExecuteScalarAsync(ct))!;
         }
 
-        _knownIdsSystems[code] = id;
+        TrackCacheEntry(_knownIdsSystems, code, id);
         return id;
+    }
+
+    private void TrackCacheEntry(Dictionary<string, Guid> cache, string key, Guid id)
+    {
+        cache[key] = id;
+        _uncommittedCacheEntries.Add((cache, key));
     }
 
     private static string BuildStopKey(string m, string mp, string ld, string dist, string c) =>
         $"{m}|{mp}|{ld}|{dist}|{c}";
+
+    private static string NormalizeCountryCode(string? stat)
+    {
+        var code = stat?.Trim().ToUpperInvariant();
+        if (string.IsNullOrEmpty(code))
+        {
+            return "CZ";
+        }
+
+        return code switch
+        {
+            "A" => "AT",
+            "B" => "BE",
+            "D" => "DE",
+            "E" => "ES",
+            "F" => "FR",
+            "H" => "HU",
+            "I" => "IT",
+            "L" => "LU",
+            "N" => "NO",
+            "S" => "SE",
+            "BIH" => "BA",
+            "SLO" => "SI",
+            "SRB" => "RS",
+            _ when code.Length == 2 => code,
+            _ => "XX"
+        };
+    }
 
     private static RouteLineType ParseRouteLineType(string? raw) => raw?.Trim().ToUpperInvariant() switch
     {
