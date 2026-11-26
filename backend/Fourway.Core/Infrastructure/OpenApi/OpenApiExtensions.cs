@@ -25,6 +25,7 @@ public static class OpenApiExtensions
                 settings.PostProcess = document =>
                 {
                     document.SchemaType = SchemaType.Swagger2;
+                    HoistParameterTypes(document);
                     CamelCaseQueryParameters(document);
                 };
             };
@@ -43,6 +44,60 @@ public static class OpenApiExtensions
                 opt.SwaggerRoutes.Add(new SwaggerUiRoute("v1", "./swagger/v1/swagger.json"));
             }
         );
+    }
+
+    // Generátor vytváří parametry ve stylu OpenAPI 3, kde typ visí ve `schema`,
+    // ale dokument se vydává jako Swagger 2.0, který u non-body parametrů typ
+    // očekává přímo na parametru. Bez toho Swagger UI typy nezobrazí.
+    private static void HoistParameterTypes(NSwag.OpenApiDocument document)
+    {
+        var parameters = document.Paths.Values
+            .SelectMany(path => path.Parameters.Concat(path.Values.SelectMany(o => o.Parameters)));
+
+        foreach (var parameter in parameters)
+        {
+            if (parameter.Kind == OpenApiParameterKind.Body || parameter.Schema is null)
+            {
+                continue;
+            }
+
+            var schema = parameter.Schema;
+            parameter.Type = schema.Type;
+            parameter.Format = schema.Format;
+            parameter.Default = schema.Default;
+            parameter.MultipleOf = schema.MultipleOf;
+            parameter.Maximum = schema.Maximum;
+            parameter.ExclusiveMaximum = schema.ExclusiveMaximum;
+            parameter.IsExclusiveMaximum = schema.IsExclusiveMaximum;
+            parameter.Minimum = schema.Minimum;
+            parameter.ExclusiveMinimum = schema.ExclusiveMinimum;
+            parameter.IsExclusiveMinimum = schema.IsExclusiveMinimum;
+            parameter.MaxLength = schema.MaxLength;
+            parameter.MinLength = schema.MinLength;
+            parameter.Pattern = schema.Pattern;
+            parameter.Item = schema.Item;
+
+            if (schema.IsEnumeration)
+            {
+                foreach (var value in schema.Enumeration)
+                {
+                    parameter.Enumeration.Add(value);
+                }
+
+                foreach (var name in schema.EnumerationNames)
+                {
+                    parameter.EnumerationNames.Add(name);
+                }
+            }
+
+            if (schema.IsNullableRaw == true)
+            {
+                parameter.ExtensionData ??= new Dictionary<string, object?>();
+                parameter.ExtensionData["x-nullable"] = true;
+            }
+
+            parameter.Schema = null;
+        }
     }
 
     // Názvy parametrů v dokumentu se tu přepisují na camelCase, aby se
