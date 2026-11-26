@@ -24,8 +24,6 @@ public static class EndpointExtensions
             options.Serializer.Options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
             options.Serializer.Options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
 
-            // Query/route/form parametry se bindují case-insensitive na CLR
-            // názvy (camelCase), JSON serializace zůstává snake_case.
             options.Binding.UsePropertyNamingPolicy = false;
 
             options.Errors.ContentType = "application/json";
