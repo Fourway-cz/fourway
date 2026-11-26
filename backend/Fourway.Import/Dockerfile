@@ -25,4 +25,5 @@ USER $APP_UID
 WORKDIR /app
 COPY --from=build /app/publish .
 
-ENTRYPOINT ["dotnet", "Fourway.Import.dll"]
+# Samotné "dotnet Fourway.Import.dll" spustí platforma na základě schedule
+ENTRYPOINT ["sleep", "infinity"]
