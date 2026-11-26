@@ -93,30 +93,11 @@ public class GetJourneys : Endpoint<GetJourneysRequest, GetJourneysResponse>
             ct);
 
         var response = new GetJourneysResponse(
-            ToStopResponse(fromStop),
-            ToStopResponse(toStop),
+            fromStop.ToStopResponse(),
+            toStop.ToStopResponse(),
             journeys.Select(ToJourneyResponse).ToList());
 
         await Send.OkAsync(response, cancellation: ct);
-    }
-
-    private static StopResponse ToStopResponse(Stop stop)
-    {
-        var hasLocation = stop.HasLocation;
-
-        return new StopResponse(
-            stop.Id,
-            stop.DisplayName,
-            stop.Municipality,
-            stop.MunicipalityPart,
-            stop.LocalityDetail,
-            stop.HasPlatform,
-            stop.WheelchairAccessible,
-            stop.HasShelter,
-            stop.HasInfoBoard,
-            stop.HasLighting,
-            hasLocation ? stop.Location!.Y : null,
-            hasLocation ? stop.Location!.X : null);
     }
 
     private static JourneyResponse ToJourneyResponse(Journey journey) => new(
@@ -142,7 +123,7 @@ public class GetJourneys : Endpoint<GetJourneysRequest, GetJourneysResponse>
     }
 
     private static JourneyLegStopResponse ToLegStopResponse(LegStop legStop) => new(
-        ToStopResponse(legStop.Stop),
+        legStop.Stop.ToStopResponse(),
         legStop.StopTime.StopSequence,
         legStop.StopTime.StopKind,
         legStop.StopTime.PlatformCode,

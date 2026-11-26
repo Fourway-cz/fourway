@@ -1,5 +1,7 @@
+using System.Text;
 using FastEndpoints.Swagger;
 using NJsonSchema;
+using NSwag;
 using NSwag.AspNetCore;
 
 namespace Fourway.Core.Infrastructure.OpenApi;
@@ -23,6 +25,7 @@ public static class OpenApiExtensions
                 settings.PostProcess = document =>
                 {
                     document.SchemaType = SchemaType.Swagger2;
+                    CamelCaseQueryParameters(document);
                 };
             };
         });
@@ -40,5 +43,42 @@ public static class OpenApiExtensions
                 opt.SwaggerRoutes.Add(new SwaggerUiRoute("v1", "./swagger/v1/swagger.json"));
             }
         );
+    }
+
+    // Názvy parametrů v dokumentu se tu přepisují na camelCase, aby se
+    // Swagger UI shodoval se skutečně přijímanými parametry.
+    private static void CamelCaseQueryParameters(NSwag.OpenApiDocument document)
+    {
+        foreach (var path in document.Paths.Values)
+        {
+            var parameters = path.Parameters
+                .Concat(path.Values.SelectMany(o => o.Parameters));
+
+            foreach (var parameter in parameters
+                         .Where(p => p.Kind == OpenApiParameterKind.Query && p.Name.Contains('_')))
+            {
+                parameter.Name = ToCamelCase(parameter.Name);
+            }
+        }
+    }
+
+    private static string ToCamelCase(string name)
+    {
+        var builder = new StringBuilder(name.Length);
+        var upperNext = false;
+
+        foreach (var c in name)
+        {
+            if (c == '_')
+            {
+                upperNext = true;
+                continue;
+            }
+
+            builder.Append(upperNext ? char.ToUpperInvariant(c) : char.ToLowerInvariant(c));
+            upperNext = false;
+        }
+
+        return builder.ToString();
     }
 }
