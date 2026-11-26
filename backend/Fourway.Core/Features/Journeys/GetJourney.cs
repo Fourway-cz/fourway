@@ -11,7 +11,8 @@ namespace Fourway.Core.Features.Journeys;
 public record GetJourneysRequest(
     [property: QueryParam] Guid FromStopId,
     [property: QueryParam] Guid ToStopId,
-    [property: QueryParam] DateTime DepartureTime);
+    [property: QueryParam] DateTime DepartureTime,
+    [property: QueryParam] int? Limit);
 
 public class GetJourneysValidator : Validator<GetJourneysRequest>
 {
@@ -33,6 +34,11 @@ public class GetJourneysValidator : Validator<GetJourneysRequest>
             .NotEqual(request => request.FromStopId)
             .When(request => request.FromStopId != Guid.Empty && request.ToStopId != Guid.Empty)
             .WithMessage("Výchozí a cílová zastávka musí být různé.");
+
+        RuleFor(request => request.Limit)
+            .InclusiveBetween(1, GetJourneys.MaxJourneysLimit)
+            .When(request => request.Limit.HasValue)
+            .WithMessage($"Limit musí být mezi 1 a {GetJourneys.MaxJourneysLimit}.");
     }
 }
 
@@ -46,6 +52,12 @@ public record GetJourneysResponse(
 /// </summary>
 public class GetJourneys : Endpoint<GetJourneysRequest, GetJourneysResponse>
 {
+    /// <summary>Výchozí počet spojení, když klient limit nespecifikuje.</summary>
+    public const int DefaultJourneysLimit = 20;
+
+    /// <summary>Nejvyšší povolený počet spojení v jednom požadavku.</summary>
+    public const int MaxJourneysLimit = 100;
+
     private readonly AppDbContext _dbContext;
     private readonly IJourneySearchService _journeySearchService;
 
@@ -66,7 +78,8 @@ public class GetJourneys : Endpoint<GetJourneysRequest, GetJourneysResponse>
             s.Summary = "Vyhledání spojení mezi zastávkami";
             s.Description =
                 "Najde přímá spojení z výchozí do cílové zastávky, která odjíždějí " +
-                "nejdříve v zadaném čase. Přestupy zatím nejsou podporovány.";
+                "nejdříve v zadaném čase. Přestupy zatím nejsou podporovány. " +
+                $"Vrací se nejvýše {MaxJourneysLimit} spojení, výchozí limit je {DefaultJourneysLimit}.";
             s.Response<GetJourneysResponse>(200, "Nalezená spojení, případně prázdný seznam.");
             s.Response<ErrorResponse>(400, "Neplatný požadavek.");
             s.Response<ErrorResponse>(404, "Výchozí nebo cílová zastávka nebyla nalezena.");
@@ -90,6 +103,7 @@ public class GetJourneys : Endpoint<GetJourneysRequest, GetJourneysResponse>
             fromStop,
             toStop,
             req.DepartureTime,
+            Math.Min(req.Limit ?? DefaultJourneysLimit, MaxJourneysLimit),
             ct);
 
         var response = new GetJourneysResponse(

@@ -14,11 +14,13 @@ public interface IJourneySearchService
     /// <param name="fromStop">Načtená doménová instance výchozí zastávky.</param>
     /// <param name="toStop">Načtená doménová instance cílové zastávky.</param>
     /// <param name="departureTime">Nejranější žádaný čas odjezdu.</param>
+    /// <param name="limit">Maximální počet vrácených spojení.</param>
     /// <param name="ct">Token zrušení.</param>
-    /// <returns>Seřazené spojení od nejdřívějšího odjezdu.</returns>
+    /// <returns>Seřazené spojení od nejdřívějšího odjezdu, nejvýše <paramref name="limit"/> kusů.</returns>
     Task<IReadOnlyCollection<Journey>> SearchAsync(
         Stop fromStop,
         Stop toStop,
         DateTime departureTime,
+        int limit,
         CancellationToken ct = default);
 }

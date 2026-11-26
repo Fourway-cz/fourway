@@ -19,6 +19,7 @@ public sealed class SimpleJourneySearchService(AppDbContext dbContext) : IJourne
         Stop fromStop,
         Stop toStop,
         DateTime departureTime,
+        int limit,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(fromStop);
@@ -207,6 +208,7 @@ public sealed class SimpleJourneySearchService(AppDbContext dbContext) : IJourne
         return journeys
             .OrderBy(j => j.DepartureTime)
             .ThenBy(j => j.ArrivalTime)
+            .Take(limit)
             .ToList();
     }
 }
