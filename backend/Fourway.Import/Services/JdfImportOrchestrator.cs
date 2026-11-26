@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using Fourway.Import.Configuration;
 using Fourway.Import.Parsing;
 using Fourway.Import.Storage;
+using Microsoft.Extensions.Logging;
 
 namespace Fourway.Import.Services;
 
@@ -11,37 +12,42 @@ public sealed class JdfImportOrchestrator
 {
     private readonly PostgresBulkImporter _bulkImporter;
     private readonly ImportOptions _options;
+    private readonly ILogger<JdfImportOrchestrator> _logger;
 
-    public JdfImportOrchestrator(PostgresBulkImporter bulkImporter, ImportOptions options)
+    public JdfImportOrchestrator(
+        PostgresBulkImporter bulkImporter,
+        ImportOptions options,
+        ILogger<JdfImportOrchestrator> logger)
     {
         _bulkImporter = bulkImporter;
         _options = options;
+        _logger = logger;
     }
 
     public async Task RunAsync(string outerZipPath, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
-        Console.WriteLine($"Inicializuji import z archivu: {outerZipPath}");
+        _logger.LogInformation("Inicializuji import z archivu: {ArchivePath}", outerZipPath);
 
         if (!_options.DryRun)
         {
             if (_options.ResetDatabase)
             {
-                Console.WriteLine("Mažu databázi (--reset)...");
+                _logger.LogInformation("Mažu databázi (--reset)...");
                 await _bulkImporter.ResetDatabaseAsync(ct);
-                Console.WriteLine("Databáze vyprázdněna.");
+                _logger.LogInformation("Databáze vyprázdněna.");
             }
 
             await _bulkImporter.InitializeAsync(ct);
         }
         else
         {
-            Console.WriteLine("[DRY-RUN] Režim simulace aktivní (databáze se neotevírá).");
+            _logger.LogInformation("[DRY-RUN] Režim simulace aktivní (databáze se neotevírá).");
         }
 
         using var outerZip = ZipFile.OpenRead(outerZipPath);
         var totalEntries = outerZip.Entries.Count(e => e.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
-        Console.WriteLine($"Archiv obsahuje {totalEntries} vnitřních linek/ZIP souborů.");
+        _logger.LogInformation("Archiv obsahuje {TotalEntries} vnitřních linek/ZIP souborů.", totalEntries);
 
         var processed = 0;
         var skipped = 0;
@@ -61,13 +67,18 @@ public sealed class JdfImportOrchestrator
 
             ct.ThrowIfCancellationRequested();
             processed++;
+            string? fileHash = null;
 
             try
             {
-                var fileHash = await ComputeEntryHashAsync(entry, ct);
+                fileHash = await ComputeEntryHashAsync(entry, ct);
                 if (_bulkImporter.IsHashAlreadyImported(fileHash))
                 {
                     skipped++;
+                    _logger.LogDebug(
+                        "Přeskakuji {EntryName}: balíček s hashem {FileHash} už byl dříve importován.",
+                        entry.Name,
+                        fileHash);
                     ReportProgress(processed, totalEntries, imported, skipped, errors, sw);
                     continue;
                 }
@@ -90,11 +101,27 @@ public sealed class JdfImportOrchestrator
                 if (!_options.DryRun)
                 {
                     await _bulkImporter.ImportPackageAsync(package, ct);
+                    _logger.LogDebug(
+                        "Balíček {EntryName} importován (zastávky: {StopCount}, trasa: {RouteStopCount}, spoje: {TripCount}, časy: {StopTimeCount}, IDS: {IdsCount}).",
+                        entry.Name,
+                        package.Zastavky.Count,
+                        package.Zaslinky.Count,
+                        package.Spoje.Count,
+                        package.Zasspoje.Count,
+                        package.LinExt.Count);
                 }
                 else
                 {
                     var routeName = package.Linky.FirstOrDefault()?.NazevLinky ?? "Neznámá linka";
-                    Console.WriteLine($"[DRY-RUN] Úspěšně zpracován balíček: {package.ArchiveName} -> Linka: '{routeName}' (Zastávky: {package.Zastavky.Count}, Trasa: {package.Zaslinky.Count}, Spoje: {package.Spoje.Count}, Časy: {package.Zasspoje.Count}, IDS: {package.LinExt.Count})");
+                    _logger.LogInformation(
+                        "[DRY-RUN] Úspěšně zpracován balíček: {ArchiveName} -> Linka: '{RouteName}' (Zastávky: {StopCount}, Trasa: {RouteStopCount}, Spoje: {TripCount}, Časy: {StopTimeCount}, IDS: {IdsCount})",
+                        package.ArchiveName,
+                        routeName,
+                        package.Zastavky.Count,
+                        package.Zaslinky.Count,
+                        package.Spoje.Count,
+                        package.Zasspoje.Count,
+                        package.LinExt.Count);
                 }
 
                 imported++;
@@ -102,7 +129,11 @@ public sealed class JdfImportOrchestrator
             catch (Exception ex)
             {
                 errors++;
-                Console.WriteLine($"Chyba při zpracování {entry.Name}: {ex.Message}");
+                _logger.LogError(
+                    ex,
+                    "Chyba při zpracování balíčku {EntryName} (hash: {FileHash}).",
+                    entry.Name,
+                    fileHash ?? "neznámý");
             }
 
             ReportProgress(processed, totalEntries, imported, skipped, errors, sw);
@@ -111,20 +142,21 @@ public sealed class JdfImportOrchestrator
         sw.Stop();
         var elapsed = sw.Elapsed;
         var rate = processed / Math.Max(0.1, elapsed.TotalSeconds);
-        Console.WriteLine();
-        Console.WriteLine("========================================");
-        Console.WriteLine($"Import dokončen za {FormatElapsed(elapsed)}.");
-        Console.WriteLine($"Rychlost:        {rate:F1} balíčků/s");
-        Console.WriteLine($"Celkem balíčků: {totalEntries}");
-        Console.WriteLine($"Importováno:     {imported}");
-        Console.WriteLine($"Přeskočeno:     {skipped}");
-        Console.WriteLine($"Chyb:           {errors}");
-        Console.WriteLine("----------------------------------------");
-        Console.WriteLine($"Zastávky:          {totalStops:N0}");
-        Console.WriteLine($"Zastávky v trase:  {totalRouteStops:N0}");
-        Console.WriteLine($"Spoje:             {totalTrips:N0}");
-        Console.WriteLine($"Časy zastavení:   {totalStopTimes:N0}");
-        Console.WriteLine("========================================");
+        _logger.LogInformation(
+            "Import dokončen za {Elapsed}. Rychlost: {Rate:F1} balíčků/s. " +
+            "Celkem balíčků: {TotalEntries}, importováno: {Imported}, přeskočeno: {Skipped} (hash už je v import_batches), chyb: {Errors}.",
+            FormatElapsed(elapsed),
+            rate,
+            totalEntries,
+            imported,
+            skipped,
+            errors);
+        _logger.LogInformation(
+            "Zastávky: {Stops:N0}, zastávky v trase: {RouteStops:N0}, spoje: {Trips:N0}, časy zastavení: {StopTimes:N0}.",
+            totalStops,
+            totalRouteStops,
+            totalTrips,
+            totalStopTimes);
     }
 
     private static string FormatElapsed(TimeSpan elapsed) =>
@@ -139,7 +171,7 @@ public sealed class JdfImportOrchestrator
         return Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 
-    private static void ReportProgress(
+    private void ReportProgress(
         int processed,
         int total,
         int imported,
@@ -150,10 +182,15 @@ public sealed class JdfImportOrchestrator
         if (processed % 250 == 0 || processed == total)
         {
             var rate = processed / Math.Max(0.1, sw.Elapsed.TotalSeconds);
-            Console.WriteLine(
-                $"[{processed}/{total}] ({(processed * 100) / total} %) " +
-                $"Importováno: {imported}, Přeskočeno: {skipped}, Chyb: {errors} " +
-                $"({rate:F0} balíčků/s)");
+            _logger.LogInformation(
+                "[{Processed}/{Total}] ({Percentage} %) Importováno: {Imported}, Přeskočeno: {Skipped}, Chyb: {Errors} ({Rate:F0} balíčků/s)",
+                processed,
+                total,
+                (processed * 100) / total,
+                imported,
+                skipped,
+                errors,
+                rate);
         }
     }
 }

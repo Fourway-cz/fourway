@@ -3,6 +3,7 @@ using Fourway.Core.Models;
 using Fourway.Import.Parsing;
 using Fourway.Import.Parsing.Models;
 using Fourway.Import.Services;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -11,6 +12,7 @@ namespace Fourway.Import.Storage;
 public sealed class PostgresBulkImporter : IAsyncDisposable
 {
     private readonly NpgsqlDataSource _dataSource;
+    private readonly ILogger<PostgresBulkImporter> _logger;
     private readonly CalendarService _calendarService = new();
 
     private readonly HashSet<string> _knownHashes = new(StringComparer.OrdinalIgnoreCase);
@@ -20,8 +22,10 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
     private readonly Dictionary<string, Guid> _knownStops = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<(Dictionary<string, Guid> Cache, string Key)> _uncommittedCacheEntries = [];
 
-    public PostgresBulkImporter(string connectionString)
+    public PostgresBulkImporter(string connectionString, ILogger<PostgresBulkImporter> logger)
     {
+        _logger = logger;
+
         var builder = new NpgsqlDataSourceBuilder(connectionString);
         builder.UseNetTopologySuite();
         builder.MapEnum<AgencyLegalForm>("agency_legal_form");
@@ -89,6 +93,14 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
                 _knownStops[key] = reader.GetGuid(5);
             }
         }
+
+        _logger.LogInformation(
+            "Načten stav databáze: {ImportedBatches} importovaných balíčků, {Agencies} dopravců, {Services} kalendářů, {IdsSystems} IDS, {Stops} zastávek.",
+            _knownHashes.Count,
+            _knownAgencies.Count,
+            _knownServices.Count,
+            _knownIdsSystems.Count,
+            _knownStops.Count);
     }
 
     public bool IsHashAlreadyImported(string hash) => _knownHashes.Contains(hash);
@@ -253,11 +265,18 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
 
                 var routeStopMap = new Dictionary<int, RouteStop>();
                 var routeStops = new List<RouteStop>();
+                var missingRouteStops = 0;
 
                 foreach (var rz in package.Zaslinky.OrderBy(x => x.TarifniCislo))
                 {
                     if (!stopMap.TryGetValue(rz.CisloZastavky, out var stopId))
                     {
+                        missingRouteStops++;
+                        _logger.LogDebug(
+                            "Balíček {ArchiveName}: přeskakuji zastávku trasy {RouteStopNumber}, zastávka {StopNumber} není v balíčku.",
+                            package.ArchiveName,
+                            rz.TarifniCislo,
+                            rz.CisloZastavky);
                         continue;
                     }
 
@@ -300,6 +319,8 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
 
                 var tripsToInsert = new List<Trip>();
                 var stopTimesToInsert = new List<StopTime>();
+                var skippedPassThroughStopTimes = 0;
+                var missingStopTimes = 0;
 
                 foreach (var rawSpoj in package.Spoje)
                 {
@@ -337,11 +358,18 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
                     {
                         if (zs.CasPrijezduMinRaw == "<" && zs.CasOdjezduMinRaw == "<")
                         {
+                            skippedPassThroughStopTimes++;
                             continue;
                         }
 
                         if (!routeStopMap.TryGetValue(zs.TarifniCislo, out var routeStop))
                         {
+                            missingStopTimes++;
+                            _logger.LogDebug(
+                                "Balíček {ArchiveName}: přeskakuji čas zastavení spoje {TripNumber}, zastávka {StopNumber} není v trase.",
+                                package.ArchiveName,
+                                rawSpoj.CisloSpoje,
+                                zs.TarifniCislo);
                             continue;
                         }
 
@@ -374,6 +402,30 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
 
                         stopTimesToInsert.Add(stopTime);
                     }
+                }
+
+                if (missingRouteStops > 0)
+                {
+                    _logger.LogWarning(
+                        "Balíček {ArchiveName}: {SkippedCount} zastávek trasy odkazovalo na neznámou zastávku a bylo přeskočeno.",
+                        package.ArchiveName,
+                        missingRouteStops);
+                }
+
+                if (missingStopTimes > 0)
+                {
+                    _logger.LogWarning(
+                        "Balíček {ArchiveName}: {SkippedCount} časů zastavení odkazovalo na neznámou zastávku trasy a bylo přeskočeno.",
+                        package.ArchiveName,
+                        missingStopTimes);
+                }
+
+                if (skippedPassThroughStopTimes > 0)
+                {
+                    _logger.LogDebug(
+                        "Balíček {ArchiveName}: {SkippedCount} časů zastavení bylo přeskočeno (průjezd '<').",
+                        package.ArchiveName,
+                        skippedPassThroughStopTimes);
                 }
 
                 if (tripsToInsert.Count > 0)
@@ -460,7 +512,20 @@ public sealed class PostgresBulkImporter : IAsyncDisposable
                 cache.Remove(key);
             }
             _uncommittedCacheEntries.Clear();
-            await tx.RollbackAsync(ct);
+
+            try
+            {
+                // Use None so that a cancelled token cannot prevent the rollback itself.
+                await tx.RollbackAsync(CancellationToken.None);
+            }
+            catch (Exception rollbackEx)
+            {
+                _logger.LogError(
+                    rollbackEx,
+                    "Rollback transakce pro balíček {ArchiveName} selhal.",
+                    package.ArchiveName);
+            }
+
             throw;
         }
     }

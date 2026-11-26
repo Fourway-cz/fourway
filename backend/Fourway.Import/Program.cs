@@ -4,8 +4,23 @@ using Fourway.Import.Extraction;
 using Fourway.Import.Services;
 using Fourway.Import.Storage;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
-Console.WriteLine("=== Fourway.Import CLI ===");
+var configuration = LoadAppSettings();
+
+using var loggerFactory = LoggerFactory.Create(builder =>
+{
+    builder.AddConfiguration(configuration.GetSection("Logging"));
+    builder.AddSimpleConsole(options =>
+    {
+        options.SingleLine = true;
+        options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
+        options.UseUtcTimestamp = false;
+    });
+    builder.SetMinimumLevel(LogLevel.Information);
+});
+
+var logger = loggerFactory.CreateLogger("Fourway.Import");
 
 var options = new ImportOptions();
 string? connectionString = null;
@@ -40,15 +55,17 @@ for (var i = 0; i < args.Length; i++)
     }
 }
 
+logger.LogInformation("=== Fourway.Import CLI ===");
+
 connectionString ??= Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
     ?? Environment.GetEnvironmentVariable("DEFAULT_CONNECTION")
-    ?? LoadAppSettings().GetConnectionString("DefaultConnection");
+    ?? configuration.GetConnectionString("DefaultConnection");
 
 if (string.IsNullOrWhiteSpace(connectionString) && !options.DryRun)
 {
-    Console.Error.WriteLine(
-        "Chyba: Nebyl zadán žádný databázový connection string.\n" +
-        "Nastavte proměnnou prostředí ConnectionStrings__DefaultConnection nebo předejte parametr --connection-string.\n" +
+    logger.LogError(
+        "Nebyl zadán žádný databázový connection string. " +
+        "Nastavte proměnnou prostředí ConnectionStrings__DefaultConnection nebo předejte parametr --connection-string. " +
         "Pro testování bez DB můžete použít přepínač --dry-run.");
     return 1;
 }
@@ -63,25 +80,30 @@ try
         var tempDir = options.TempDirectory ?? Path.GetTempPath();
         downloadedTempFile = Path.Combine(tempDir, $"jdf_{Guid.NewGuid():N}.zip");
 
-        var downloader = new JdfArchiveDownloader();
+        var downloader = new JdfArchiveDownloader(loggerFactory.CreateLogger<JdfArchiveDownloader>());
         var downloadSw = Stopwatch.StartNew();
         archivePath = await downloader.DownloadAsync(options.JdfUrl, downloadedTempFile);
         downloadSw.Stop();
-        Console.WriteLine($"Stahování trvalo {downloadSw.Elapsed.TotalSeconds:F1} s.");
+        logger.LogInformation("Stahování trvalo {ElapsedSeconds:F1} s.", downloadSw.Elapsed.TotalSeconds);
     }
     else
     {
-        Console.WriteLine($"Používám lokální archiv: {archivePath}");
+        logger.LogInformation("Používám lokální archiv: {ArchivePath}", archivePath);
     }
 
     if (!File.Exists(archivePath))
     {
-        Console.Error.WriteLine($"Chyba: Archiv '{archivePath}' neexistuje.");
+        logger.LogError("Archiv {ArchivePath} neexistuje.", archivePath);
         return 1;
     }
 
-    await using var bulkImporter = new PostgresBulkImporter(connectionString ?? "Host=localhost;Database=dummy");
-    var orchestrator = new JdfImportOrchestrator(bulkImporter, options);
+    await using var bulkImporter = new PostgresBulkImporter(
+        connectionString ?? "Host=localhost;Database=dummy",
+        loggerFactory.CreateLogger<PostgresBulkImporter>());
+    var orchestrator = new JdfImportOrchestrator(
+        bulkImporter,
+        options,
+        loggerFactory.CreateLogger<JdfImportOrchestrator>());
 
     await orchestrator.RunAsync(archivePath);
 
@@ -89,8 +111,7 @@ try
 }
 catch (Exception ex)
 {
-    Console.Error.WriteLine($"\n[FATAL ERROR] {ex.Message}");
-    Console.Error.WriteLine(ex.StackTrace);
+    logger.LogCritical(ex, "Import selhal: {ErrorMessage}", ex.Message);
     return 1;
 }
 finally
@@ -100,11 +121,11 @@ finally
         try
         {
             File.Delete(downloadedTempFile);
-            Console.WriteLine("Dočasný archiv byl smazán.");
+            logger.LogInformation("Dočasný archiv byl smazán.");
         }
-        catch
+        catch (Exception ex)
         {
-            // Ignore cleanup failure
+            logger.LogWarning(ex, "Dočasný archiv {ArchivePath} se nepodařilo smazat.", downloadedTempFile);
         }
     }
 }
@@ -116,6 +137,10 @@ static IConfiguration LoadAppSettings()
     {
         builder.AddJsonFile(Path.Combine(directory, "appsettings.json"), optional: true);
     }
+
+    // Allows overriding any setting (including Logging:LogLevel) from the environment,
+    // e.g. Logging__LogLevel__Fourway.Import=Debug.
+    builder.AddEnvironmentVariables();
 
     return builder.Build();
 }
@@ -135,5 +160,6 @@ static void PrintUsage()
 
         Proměnné prostředí:
           ConnectionStrings__DefaultConnection   Výchozí connection string
+          Logging__LogLevel__Fourway.Import      Úroveň logování (např. Debug)
         """);
 }

@@ -1,11 +1,15 @@
+using Microsoft.Extensions.Logging;
+
 namespace Fourway.Import.Extraction;
 
 public sealed class JdfArchiveDownloader
 {
     private readonly HttpClient _httpClient;
+    private readonly ILogger<JdfArchiveDownloader> _logger;
 
-    public JdfArchiveDownloader(HttpClient? httpClient = null)
+    public JdfArchiveDownloader(ILogger<JdfArchiveDownloader> logger, HttpClient? httpClient = null)
     {
+        _logger = logger;
         _httpClient = httpClient ?? new HttpClient
         {
             Timeout = TimeSpan.FromMinutes(30)
@@ -14,7 +18,7 @@ public sealed class JdfArchiveDownloader
 
     public async Task<string> DownloadAsync(string url, string destinationPath, CancellationToken ct = default)
     {
-        Console.WriteLine($"Stahuji {url}...");
+        _logger.LogInformation("Stahuji {Url}...", url);
 
         using var response = await _httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
@@ -39,12 +43,16 @@ public sealed class JdfArchiveDownloader
                 if (percentage >= lastReported + 10)
                 {
                     lastReported = percentage;
-                    Console.WriteLine($"Staženo: {percentage} % ({totalRead / (1024 * 1024)} MB / {totalBytes / (1024 * 1024)} MB)");
+                    _logger.LogInformation(
+                        "Staženo: {Percentage} % ({DownloadedMb} MB / {TotalMb} MB)",
+                        percentage,
+                        totalRead / (1024 * 1024),
+                        totalBytes / (1024 * 1024));
                 }
             }
         }
 
-        Console.WriteLine($"Stažení dokončeno ({totalRead / (1024 * 1024)} MB).");
+        _logger.LogInformation("Stažení dokončeno ({SizeMb} MB).", totalRead / (1024 * 1024));
         return destinationPath;
     }
 }
